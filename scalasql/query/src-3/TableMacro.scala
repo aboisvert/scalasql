@@ -11,8 +11,21 @@ import scalasql.core.Queryable.ResultSetIterator
 
 object TableMacros:
 
+  /** Generates Table.Metadata for `object SomeTable extends Table[SomeTable]` */
   def metadataImpl[V[_[_]] : Type](using Quotes): Expr[Table.Metadata[V]] =
     import quotes.reflect.*
+
+    /** Returns the human-readable type name of a TypeRepr; used for error-reporting. */
+    def fullTypeName(tpe: TypeRepr): String = tpe match
+      // Note: match is not exhaustive -- doesn't handle Scala's array of fancy types
+      case t: NamedType =>
+        t.name
+      case o: OrType =>
+        fullTypeName(o.left) + " | " + fullTypeName(o.right)
+      case o: AndType =>
+        fullTypeName(o.left) + " & " + fullTypeName(o.right)
+      case AppliedType(base, args) =>
+        fullTypeName(base) + args.map(fullTypeName).mkString("[", ",", "]")
 
     val classSymbol = TypeRepr.of[V[Column]].classSymbol.get
     val constructor = classSymbol.primaryConstructor
@@ -30,7 +43,7 @@ object TableMacros:
                 case Some(mappedType) =>
                   '{ Column[t]($tableRef, Table.columnNameOverride($tableRef.value)($nameExpr))($mappedType) }.asTerm
                 case None =>
-                  report.errorAndAbort(s"TypeMapper[$tp] not found.", Position.ofMacroExpansion)
+                  report.errorAndAbort(s"TypeMapper[${fullTypeName(tp)}] not found.", Position.ofMacroExpansion)
 
     def constructorCall__(tableRef: Expr[TableRef]) =
       val ownerType = TypeTree.of[V[Column]]
@@ -55,16 +68,21 @@ object TableMacros:
     def queryables =
       Expr.ofList(
         for param <- constructorParameters yield
-          val tpe = subParam[Sc](param.typeRef)
+          // report.info(s"param: ${param.name}", Position.ofMacroExpansion)
+          val tpe1 = subParam[Sc](param.typeRef)
           val tpe2 = subParam[SqlExpr](param.typeRef)
-          (tpe.asType, tpe2.asType) match
-            case ('[t1], '[t2]) => Expr.summon[Row[t2, t1]].get
+          (tpe1.asType, tpe2.asType) match
+            case ('[t1], '[t2]) => Expr.summon[Row[t2, t1]].getOrElse({
+              report.errorAndAbort(
+                s"Queryable.Row[${fullTypeName(tpe2)}, ${fullTypeName(tpe1)}] not found.",
+                Position.ofMacroExpansion)
+            }) //.asTerm
       )
 
     val labels = Expr(constructorParameters.map(_.name)) // TODO isTypeParamType
 
     def flattenExprs(queryable: Expr[Metadata.QueryableProxy], table: Expr[V[SqlExpr]]) =
-      val exprs = 
+      val exprs =
         for (param, i) <- constructorParameters.zipWithIndex yield
           val iExpr = Expr(i)
           val tpe = subParam[Sc](param.typeRef)
@@ -88,7 +106,7 @@ object TableMacros:
         (tpe.asType, tpe2.asType) match
           case ('[t1], '[t2]) =>
             '{ $queryable.apply[t2, t1]($iExpr).construct($args) : Sc[t1] }.asTerm
-      
+
       val baseConstructorTerm = Select(New(ownerType), constructor)
       val typeAppliedConstructorTerm = TypeApply(baseConstructorTerm, List(TypeTree.of[Sc]))
       Apply(typeAppliedConstructorTerm, params).asExprOf[V[Sc]]

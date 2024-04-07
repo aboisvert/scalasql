@@ -183,22 +183,20 @@ object DbApi {
       val flattened = unpackQueryable(query, qr, config)
       if (qr.isExecuteUpdate(query)) updateSql(flattened).asInstanceOf[R]
       else {
-        try {
-          val res = stream(query, fetchSize, queryTimeoutSeconds)(
-            qr.asInstanceOf[Queryable[Q, Seq[_]]],
-            fileName,
-            lineNum
+        val res = stream(query, fetchSize, queryTimeoutSeconds)(
+          qr.asInstanceOf[Queryable[Q, Seq[_]]],
+          fileName,
+          lineNum
+        )
+        if (qr.isSingleRow(query)) {
+          val results = res.take(2).toVector
+          assert(
+            results.size == 1,
+            s"Single row query must return 1 result, not ${results.size}"
           )
-          if (qr.isSingleRow(query)) {
-            val results = res.take(2).toVector
-            assert(
-              results.size == 1,
-              s"Single row query must return 1 result, not ${results.size}"
-            )
-            results.head.asInstanceOf[R]
-          } else {
-            res.toVector.asInstanceOf[R]
-          }
+          results.head.asInstanceOf[R]
+        } else {
+          res.toVector.asInstanceOf[R]
         }
       }
     }
@@ -212,8 +210,8 @@ object DbApi {
       streamFlattened0(
         r => {
           qr.asInstanceOf[Queryable[Q, R]].construct(query, r) match {
-            case s: Seq[R] => s.head
-            case r: R => r
+            case s: Seq[R] @unchecked => s.head
+            case r: R @unchecked => r
           }
         },
         flattened,

@@ -6,7 +6,10 @@ import de.tobiasroeser.mill.vcs.version.VcsVersion
 import com.goyeau.mill.scalafix.ScalafixModule
 import mill._, scalalib._, publish._
 
-val scalaVersions = Seq("2.13.12", "3.3.1")
+//val scalaVersions = Seq("2.13.12")
+val scalaVersions = Seq("3.4.1")
+
+//val scalaVersions = Seq("2.13.12", /* "3.3.1" */)
 
 trait Common extends CrossScalaModule with PublishModule with ScalafixModule{
   def scalaVersion = crossScalaVersion
@@ -81,17 +84,17 @@ trait ScalaSql extends Common{
 
       val queryableRowDefs = for (i <- Range.inclusive(2, 22)) yield {
         def commaSep(f: Int => String) = commaSep0(i, f)
-        s"""implicit def Tuple${i}Queryable[${commaSep(j => s"Q$j")}, ${commaSep(j => s"R$j")}](
-           |    implicit
-           |    ${commaSep(j => s"q$j: Queryable.Row[Q$j, R$j]")}
-           |): Queryable.Row[(${commaSep(j => s"Q$j")}), (${commaSep(j => s"R$j")})] = {
-           |  new Queryable.Row.TupleNQueryable(
-           |    Seq(${commaSep(j => s"q$j.walkLabels()")}),
-           |    t => Seq(${commaSep(j => s"q$j.walkExprs(t._$j)")}),
-           |    construct0 = rsi => (${commaSep(j => s"q$j.construct(rsi)")}),
-           |    deconstruct0 = { is => (${commaSep(j => s"""q$j.deconstruct(is._$j)""")}) }
-           |  )
-           |}""".stripMargin
+        s"""  implicit def Tuple${i}Queryable[${commaSep(j => s"Q$j")}, ${commaSep(j => s"R$j")}](
+           |      implicit
+           |      ${commaSep(j => s"q$j: Queryable.Row[Q$j, R$j]")}
+           |  ): Queryable.Row[(${commaSep(j => s"Q$j")}), (${commaSep(j => s"R$j")})] = {
+           |    new Queryable.Row.TupleNQueryable(
+           |      Seq(${commaSep(j => s"q$j.walkLabels()")}),
+           |      t => Seq(${commaSep(j => s"q$j.walkExprs(t._$j)")}),
+           |      construct0 = rsi => (${commaSep(j => s"q$j.construct(rsi)")}),
+           |      deconstruct0 = { is => (${commaSep(j => s"""q$j.deconstruct(is._$j)""")}) }
+           |    )
+           |  }""".stripMargin
       }
 
 
@@ -100,7 +103,7 @@ trait ScalaSql extends Common{
         s"""package scalasql.core.generated
            |import scalasql.core.Queryable
            |trait QueryableRow{
-           |  ${queryableRowDefs.mkString("\n")}
+           |${queryableRowDefs.mkString("\n")}
            |}
            |""".stripMargin
       )
@@ -135,26 +138,26 @@ trait ScalaSql extends Common{
                  |      )
                  |
                  |""".stripMargin
-          s"""def batched[${commaSep(j => s"T$j")}](${commaSep(j => s"f$j: V[Column] => Column[T$j]")})(
-             |    items: (${commaSep(j => s"Expr[T$j]")})*
-             |)(implicit qr: Queryable[V[Column], R]): scalasql.query.InsertColumns[V, R] $impl""".stripMargin
+          s"""  def batched[${commaSep(j => s"T$j")}](${commaSep(j => s"f$j: V[Column] => Column[T$j]")})(
+             |      items: (${commaSep(j => s"Expr[T$j]")})*
+             |  )(implicit qr: Queryable[V[Column], R]): scalasql.query.InsertColumns[V, R] $impl""".stripMargin
         }
       }
 
       val queryableRowDefs = for (i <- Range.inclusive(2, 22)) yield {
         def commaSep(f: Int => String) = commaSep0(i, f)
-        s"""implicit def Tuple${i}Queryable[${commaSep(j => s"Q$j")}, ${commaSep(j => s"R$j")}](
-           |    implicit
-           |    ${commaSep(j => s"q$j: Queryable.Row[Q$j, R$j]")}
-           |): Queryable.Row[(${commaSep(j => s"Q$j")}), (${commaSep(j => s"R$j")})] = {
-           |  import scalasql.core.SqlStr.SqlStringSyntax
-           |  new Queryable.Row.TupleNQueryable(
-           |    Seq(${commaSep(j => s"q$j.walkLabels()")}),
-           |    t => Seq(${commaSep(j => s"q$j.walkExprs(t._$j)")}),
-           |    construct0 = rsi => (${commaSep(j => s"q$j.construct(rsi)")}),
-           |    deconstruct0 = { is => (${commaSep(j => s"""q$j.deconstruct(is._$j)""")}) }
-           |  )
-           |}""".stripMargin
+        s"""  implicit def Tuple${i}Queryable[${commaSep(j => s"Q$j")}, ${commaSep(j => s"R$j")}](
+           |      implicit
+           |      ${commaSep(j => s"q$j: Queryable.Row[Q$j, R$j]")}
+           |  ): Queryable.Row[(${commaSep(j => s"Q$j")}), (${commaSep(j => s"R$j")})] = {
+           |    import scalasql.core.SqlStr.SqlStringSyntax
+           |    new Queryable.Row.TupleNQueryable(
+           |      Seq(${commaSep(j => s"q$j.walkLabels()")}),
+           |      t => Seq(${commaSep(j => s"q$j.walkExprs(t._$j)")}),
+           |      construct0 = rsi => (${commaSep(j => s"q$j.construct(rsi)")}),
+           |      deconstruct0 = { is => (${commaSep(j => s"""q$j.deconstruct(is._$j)""")}) }
+           |    )
+           |  }""".stripMargin
       }
 
       val joinAppendDefs = for (i <- Range.inclusive(2, 21)) yield {
@@ -164,13 +167,13 @@ trait ScalaSql extends Common{
         val commaSepR = commaSep(j => s"R$j")
         val joinAppendType = s"scalasql.query.JoinAppend[($commaSepQ), QA, ($commaSepQ, QA), ($commaSepR, RA)]"
         s"""
-           |implicit def append$i[$commaSepQ, QA, $commaSepR, RA](
-           |      implicit qr0: Queryable.Row[($commaSepQ, QA), ($commaSepR, RA)],
-           |      qr20: Queryable.Row[QA, RA]): $joinAppendType = new $joinAppendType {
-           |    override def appendTuple(t: ($commaSepQ), v: QA): ($commaSepQ, QA) = (${commaSep(j => s"t._$j")}, v)
+           |  implicit def append$i[$commaSepQ, QA, $commaSepR, RA](
+           |        implicit qr0: Queryable.Row[($commaSepQ, QA), ($commaSepR, RA)],
+           |        qr20: Queryable.Row[QA, RA]): $joinAppendType = new $joinAppendType {
+           |      override def appendTuple(t: ($commaSepQ), v: QA): ($commaSepQ, QA) = (${commaSep(j => s"t._$j")}, v)
            |
-           |    def qr: Queryable.Row[($commaSepQ, QA), ($commaSepR, RA)] = qr0
-           |}""".stripMargin
+           |      def qr: Queryable.Row[($commaSepQ, QA), ($commaSepR, RA)] = qr0
+           |  }""".stripMargin
       }
 
       os.write(
@@ -179,7 +182,7 @@ trait ScalaSql extends Common{
            |import scalasql.core.{Queryable, Expr}
            |import scalasql.query.Column
            |trait Insert[V[_[_]], R]{
-           |  ${defs(false).mkString("\n")}
+           |${defs(false).mkString("\n")}
            |}
            |trait InsertImpl[V[_[_]], R] extends Insert[V, R]{ this: scalasql.query.Insert[V, R] =>
            |  def newInsertValues[R](
@@ -187,15 +190,15 @@ trait ScalaSql extends Common{
            |        columns: Seq[Column[_]],
            |        valuesLists: Seq[Seq[Expr[_]]]
            |    )(implicit qr: Queryable[V[Column], R]): scalasql.query.InsertColumns[V, R]
-           |  ${defs(true).mkString("\n")}
+           |${defs(true).mkString("\n")}
            |}
            |
            |trait QueryableRow{
-           |  ${queryableRowDefs.mkString("\n")}
+           |${queryableRowDefs.mkString("\n")}
            |}
            |
            |trait JoinAppend extends scalasql.query.JoinAppendLowPriority{
-           |  ${joinAppendDefs.mkString("\n")}
+           |${joinAppendDefs.mkString("\n")}
            |}
            |""".stripMargin
       )
